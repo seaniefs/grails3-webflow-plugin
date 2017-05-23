@@ -15,10 +15,14 @@
 package org.grails.webflow.engine.builder
 
 import grails.util.GrailsNameUtils
+import grails.util.Holders
 import grails.web.mapping.UrlMappingsHolder
+import groovy.util.logging.Slf4j
+import org.grails.web.gsp.io.GrailsConventionGroovyPageLocator
 import org.grails.webflow.PropertyExpression
 import org.springframework.binding.convert.ConversionService
 import org.springframework.binding.expression.ExpressionParser
+import org.springframework.webflow.execution.RequestContext
 
 import java.beans.PropertyDescriptor
 
@@ -93,6 +97,7 @@ class FlowBuilder extends AbstractFlowBuilder implements GroovyObject, Applicati
 
     protected FlowBuilderServices flowBuilderServices
     protected FlowDefinitionLocator definitionLocator
+    private static ThreadLocal<List<FlowBuilderState>> flowBuilderThreadLocal = new ThreadLocal<List<FlowBuilderState>>()
 
     FlowBuilder(String flowId, FlowBuilderServices flowBuilderServices, FlowDefinitionLocator definitionLocator) {
         this.flowId = flowId
@@ -167,10 +172,16 @@ class FlowBuilder extends AbstractFlowBuilder implements GroovyObject, Applicati
                         return builder.invokeMethod(methodName, methodArgs)
                     }
 
-                    c.metaClass = closureMetaClass
-                    c.delegate = flowInfo
-                    c.resolveStrategy = Closure.DELEGATE_FIRST
-                    c.call()
+                    currentBuilderState?.pushCapturer(flowInfo)
+                    try {
+                        c.metaClass = closureMetaClass
+                        c.delegate = flowInfo
+                        c.resolveStrategy = Closure.DELEGATE_FIRST
+                        c.call()
+                    }
+                    finally {
+                        currentBuilderState?.popCapturer(flowInfo)
+                    }
 
                     Transition[] trans = flowInfo.transitions
 
@@ -183,8 +194,7 @@ class FlowBuilder extends AbstractFlowBuilder implements GroovyObject, Applicati
                     }
                     else if (trans.length == 0 && flowInfo.subflow == null) {
                         String view = createViewPath(flowInfo, name)
-
-                        state = createEndState(name,view, flowFactory, flowInfo.outputMapper, flowInfo.entryAction)
+                        state = createEndState(name, view, flowFactory, flowInfo.outputMapper, flowInfo.entryAction)
                         state.attributes.put("commit", true)
                     }
                     else if (action) {
@@ -343,10 +353,9 @@ class FlowBuilder extends AbstractFlowBuilder implements GroovyObject, Applicati
 
     protected State createEndState(String stateId, String viewId, FlowArtifactFactory flowFactory, Mapper outputMapper=null, Closure customEntryAction=null) {
         ViewFactory viewFactory = createViewFactory(viewId)
-
         return flowFactory.createEndState(stateId, getFlow(),
             getActionArrayOrNull(customEntryAction),
-            new ViewFactoryActionAdapter(viewFactory),
+            new GrailsWebFlowViewFactoryActionAdapter(viewId, viewFactory),
             outputMapper, null, null)
     }
 
@@ -412,8 +421,55 @@ class FlowBuilder extends AbstractFlowBuilder implements GroovyObject, Applicati
         return (name.equals(FLOW_METHOD) && argArray.length == 1 && argArray[0] instanceof Closure)
     }
 
+    public static FlowBuilder getCurrentBuilder() {
+        return currentBuilderState?.flowBuilder
+    }
+
+    public static FlowBuilderState getCurrentBuilderState() {
+        List<FlowBuilderState> flowBuilderStates = flowBuilderThreadLocal.get()
+        if(flowBuilderStates?.size() > 0) {
+            return flowBuilderStates.last()
+        }
+        return null
+    }
+
+    public static FlowInfoCapturer getCurrentFlowInfoCapturer() {
+        return currentBuilderState?.capturer
+    }
+
     void buildStates() throws FlowBuilderException {
-        flow(this.flowClosure)
+        List<FlowBuilderState> flowBuilderStates = flowBuilderThreadLocal.get()
+        if(flowBuilderStates == null) {
+            flowBuilderStates = []
+            flowBuilderThreadLocal.set(flowBuilderStates)
+        }
+        flowBuilderStates.push(new FlowBuilderState(this))
+        try {
+            flow(this.flowClosure)
+        }
+        finally {
+            flowBuilderStates.pop()
+        }
+    }
+
+}
+
+class FlowBuilderState {
+    FlowBuilder flowBuilder
+    List<FlowInfoCapturer> flowInfoCapturers = []
+    FlowBuilderState(FlowBuilder flowBuilder) {
+        this.flowBuilder = flowBuilder
+    }
+    FlowInfoCapturer getCapturer() {
+        return flowInfoCapturers?.size() > 0 ? flowInfoCapturers.last() : null
+    }
+    void pushCapturer(FlowInfoCapturer flowInfoCapturer) {
+        flowInfoCapturers.push(flowInfoCapturer)
+    }
+    void popCapturer(FlowInfoCapturer flowInfoCapturer) {
+        if(flowInfoCapturers?.size() > 0 && flowInfoCapturers.last() == flowInfoCapturer) {
+            flowInfoCapturers.pop()
+        }
     }
 }
 
@@ -452,6 +508,47 @@ class GlobalTransitionCapturer {
 
     Transition[] getGlobalTransitions() {
         return globalTransitions.toArray(new Transition[globalTransitions.size()])
+    }
+
+}
+
+/**
+ * Used to only display a view on EndState if it really exists
+ */
+@Slf4j
+class GrailsWebFlowViewFactoryActionAdapter extends ViewFactoryActionAdapter {
+
+    private String viewId
+    private boolean viewFactoryExists = false
+    private boolean viewExists = true
+    private boolean viewCheckPerformed = false
+
+    GrailsWebFlowViewFactoryActionAdapter(String viewId, ViewFactory viewFactory) {
+        super(viewFactory)
+        this.viewId = viewId;
+        this.viewFactoryExists = viewFactory != null;
+    }
+    protected Event doExecute(RequestContext context) throws Exception {
+        if(viewFactoryExists) {
+            checkIfViewExists()
+            if (viewExists) {
+                super.doExecute(context);
+            }
+        }
+        return new Event(this, "success");
+    }
+    private synchronized void checkIfViewExists() {
+        if(!viewCheckPerformed && viewFactoryExists) {
+            viewCheckPerformed = true
+            try {
+                GrailsConventionGroovyPageLocator pageLocator = Holders.applicationContext.getBean(GrailsConventionGroovyPageLocator)
+                viewExists = pageLocator.findViewByPath(viewId) != null
+            }
+            catch (Exception eGen) {
+                // Ignore
+                log.info("!! Cannot check if: ${viewId} exists for EndState - assuming it does:", eGen)
+            }
+        }
     }
 
 }

@@ -12,7 +12,7 @@ class WebflowGrailsPlugin extends Plugin {
     def grailsVersion = "3.1.4 > *"
     // resources that are excluded from plugin packaging
     def pluginExcludes = [
-        "grails-app/views/error.gsp"
+        "grails-app/views/**"
     ]
 
     // TODO Fill in these fields

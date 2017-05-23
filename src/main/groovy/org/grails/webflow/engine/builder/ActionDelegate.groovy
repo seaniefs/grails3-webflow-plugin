@@ -15,7 +15,7 @@
 package org.grails.webflow.engine.builder
 
 import grails.core.GrailsApplication
-import grails.util.GrailsClassUtils
+import grails.util.GrailsNameUtils
 import org.grails.core.artefact.TagLibArtefactHandler
 import org.grails.gsp.GroovyPage
 import org.springframework.webflow.core.collection.LocalAttributeMap
@@ -74,7 +74,7 @@ class ActionDelegate extends AbstractDelegate {
         }
 
         def obj = args[0]
-        def modelName = GrailsClassUtils.getPropertyName(name.getClass())
+        def modelName = GrailsNameUtils.getPropertyName(name.getClass())
         return action.result(name, [(modelName):obj])
     }
 }

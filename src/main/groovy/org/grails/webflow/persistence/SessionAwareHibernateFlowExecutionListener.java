@@ -38,6 +38,7 @@ import org.springframework.util.ClassUtils;
 public class SessionAwareHibernateFlowExecutionListener extends HibernateFlowExecutionListener {
 
     private static final boolean hibernate3Present = ClassUtils.isPresent("org.hibernate.connection.ConnectionProvider", HibernateFlowExecutionListener.class.getClassLoader());
+    private static final boolean hibernate5Present = ClassUtils.isPresent("org.hibernate.boot.model.naming.PhysicalNamingStrategy", HibernateFlowExecutionListener.class.getClassLoader());
 
     private final Logger log = LoggerFactory.getLogger(getClass());
 
@@ -121,13 +122,17 @@ public class SessionAwareHibernateFlowExecutionListener extends HibernateFlowExe
         }
 
         Session session = null;
-        if (hibernate3Present) {
+        if(hibernate5Present) {
+            org.springframework.orm.hibernate5.SessionHolder sessionHolder = (org.springframework.orm.hibernate5.SessionHolder) TransactionSynchronizationManager.getResource(localSessionFactory);
+            if (sessionHolder != null) session = sessionHolder.getSession();
+        }
+        else if (hibernate3Present) {
             org.springframework.orm.hibernate3.SessionHolder sessionHolder = (org.springframework.orm.hibernate3.SessionHolder) TransactionSynchronizationManager.getResource(localSessionFactory);
             if (sessionHolder != null) session = sessionHolder.getSession();
         } else {
             SessionHolder sessionHolder = (SessionHolder) TransactionSynchronizationManager.getResource(localSessionFactory);  
-             if (sessionHolder != null) session = sessionHolder.getSession();
+            if (sessionHolder != null) session = sessionHolder.getSession();
        }
-       flowScope.put(PERSISTENCE_CONTEXT_ATTRIBUTE, session);
+        flowScope.put(PERSISTENCE_CONTEXT_ATTRIBUTE, session);
     }
 }

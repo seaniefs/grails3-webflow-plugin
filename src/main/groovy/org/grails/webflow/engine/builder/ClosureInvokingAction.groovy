@@ -80,7 +80,6 @@ class ClosureInvokingAction extends AbstractAction {
                 }
                 co.metaClass.hasErrors = {-> errors?.hasErrors() ? true : false }
                 def constrainedProperties = new DefaultConstraintEvaluator().evaluate(co.newInstance(), (GrailsDomainClassProperty[])null)
-                //def constrainedProperties = GrailsDomainConfigurationUtil.evaluateConstraints((Object)co.newInstance())
                 co.metaClass.getConstraints = {-> constrainedProperties }
                 co.metaClass.validate = {->
                     errors = new org.springframework.validation.BeanPropertyBindingResult(delegate, delegate.class.name)
@@ -196,82 +195,5 @@ class ClosureInvokingAction extends AbstractAction {
         }
 
         return result(name,name, args)
-    }
-
-    /**
-     * Utility method for creating a GrailsDataBinder instance
-     *
-     * @param target The target object to bind to
-     * @param objectName The name of the object
-     * @param request A request instance
-     * @return A GrailsDataBinder instance
-     */
-    // TODO: Remove
-    public static def createBinder(Object target, String objectName, HttpServletRequest request) {
-        final GrailsWebRequest webRequest = GrailsWebRequest.lookup(request);
-        PropertyEditorRegistry registry = webRequest.applicationContext.getBean(PropertyEditorRegistry)
-        def binder = createBinder(target, registry);
-        initializeFromWebRequest(binder, webRequest, target);
-
-        Locale locale = RequestContextUtils.getLocale(request);
-        registerCustomEditors(webRequest, registry, locale);
-        return binder;
-    }
-
-    private static void initializeFromWebRequest(GrailsWebDataBinder binder, GrailsWebRequest webRequest, Object target) {
-        if (webRequest == null) {
-            return;
-        }
-
-//        binder.setGrailsApplication(webRequest.getAttributes().getGrailsApplication());
-
-        if (webRequest.getApplicationContext() != null && webRequest.getApplicationContext().containsBean("dataBindingValidator")) {
-            Validator validator = webRequest.getApplicationContext().getBean("dataBindingValidator", Validator.class);
-            if (target != null && validator.supports(target.getClass())) {
-//                binder.setValidator(validator);
-            }
-        }
-    }
-
-    /**
-     * Utility method for creating a GrailsDataBinder instance
-     *
-     * @param target The target object to bind to
-     * @param objectName The name of the object
-     * @return A GrailsDataBinder instance
-     */
-    // TODO: Remove
-    public static def createBinder(Object target, PropertyEditorRegistry registry) {
-
-//        GrailsWebDataBinder binder = new GrailsWebDataBinder(target);
-        GrailsWebDataBinder binder = new GrailsWebDataBinder(Holders.findApplication());
-//        GrailsDataBinder binder = new GrailsDataBinder(target, objectName);
-        org.springframework.validation.DataBinder dataBinder = new org.springframework.validation.DataBinder(target);
-        dataBinder.registerCustomEditor(byte[].class, new ByteArrayMultipartFileEditor());
-        dataBinder.registerCustomEditor(String.class, new StringMultipartFileEditor());
-        dataBinder.registerCustomEditor(Currency.class, new CurrencyEditor());
-        dataBinder.registerCustomEditor(Locale.class, new LocaleEditor());
-        dataBinder.registerCustomEditor(TimeZone.class, new TimeZoneEditor());
-        dataBinder.registerCustomEditor(URI.class, new UriEditor());
-
-        final GrailsWebRequest webRequest = GrailsWebRequest.lookup();
-        if (webRequest != null) {
-            initializeFromWebRequest(binder, webRequest, target);
-            Locale locale = RequestContextUtils.getLocale(webRequest.getCurrentRequest());
-            registerCustomEditors(webRequest, registry, locale);
-        }
-
-        return binder;
-    }
-
-    /**
-     * Registers all known
-     *
-     * @param grailsWebRequest
-     * @param registry
-     * @param locale
-     */
-    public static void registerCustomEditors(GrailsWebRequest grailsWebRequest, PropertyEditorRegistry registry, Locale locale) {
-        PropertyEditorRegistryUtils.registerCustomEditors(grailsWebRequest, registry, locale);
     }
 }

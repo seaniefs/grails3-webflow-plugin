@@ -17,8 +17,8 @@ package org.grails.webflow
 
 import grails.core.GrailsControllerClass
 import grails.util.GrailsClassUtils
-import grails.util.GrailsNameUtils
 import grails.web.UrlConverter
+import grails.web.mapping.UrlMappingsHolder
 import org.grails.core.util.ClassPropertyFetcher
 import org.grails.webflow.context.servlet.GrailsFlowUrlHandler
 import org.grails.webflow.engine.builder.FlowBuilder
@@ -133,6 +133,8 @@ class WebFlowPluginSupport {
     //
     static doWithDynamicMethods = { appCtx, application ->
 
+        UrlMappingsHolder grailsUrlMappingsHolder = appCtx.getBean(UrlMappingsHolder)
+
         // Manually wire this... :P
         FlowAwareDefaultRequestStateLookupStrategy lookupStrategy = appCtx.getBean(FlowAwareDefaultRequestStateLookupStrategy)
         lookupStrategy.grailsApplication = application
@@ -142,7 +144,7 @@ class WebFlowPluginSupport {
 
         // Find instances of ...Flow closures in the controller
         for (GrailsControllerClass c in application.controllerClasses) {
-            registerFlowsForController(appCtx, c)
+            registerFlowsForController(appCtx, c, grailsUrlMappingsHolder)
         }
 
         RequestControlContext.metaClass.getFlow = { -> delegate.flowScope }
@@ -172,12 +174,12 @@ class WebFlowPluginSupport {
         MutableAttributeMap.metaClass.putAt = { String key, value -> delegate.put(key,value) }
     }
 
-    private static void registerFlowsForController(appCtx, GrailsControllerClass c) {
+    private static void registerFlowsForController(appCtx, GrailsControllerClass c, UrlMappingsHolder grailsUrlMappingsHolder) {
         GrailsFlowHandlerMapping grailsFlowHandlerMapping = appCtx.getBean(GrailsFlowHandlerMapping)
         UrlConverter urlConverter = appCtx.getBean(UrlConverter)
 
         // Clear any old mappings...
-        grailsFlowHandlerMapping.clearFlowMappingsForController(c)
+        grailsFlowHandlerMapping.clearFlows(c)
 
         Map<String, Closure> flows = [:]
         final String FLOW_SUFFIX = "Flow"
@@ -188,16 +190,14 @@ class WebFlowPluginSupport {
                 final Class<?> propertyType = propertyDescriptor.getPropertyType();
                 if ((propertyType == Object.class || propertyType == Closure.class) && propertyDescriptor.getName().endsWith(FLOW_SUFFIX)) {
                     String closureName = propertyDescriptor.getName();
-                    flows.put(closureName, getPropertyValue(classPropertyFetcher, closureName, Closure.class, c.clazz));
+                    // Ensure that we get the bean reference, so as services and other beans are autowired correctly...
+                    def controllerBean = appCtx.getBean(c.clazz)
+                    def flowClosure = controllerBean."${closureName}"
+                    flows.put(closureName, flowClosure)
                 }
             }
         }
         // Register the flows...
-        if(flows.size() > 0) {
-            String controllerPath = "/" + urlConverter.toUrlElement(c.name);
-            grailsFlowHandlerMapping.registerFlowMappingPattern(controllerPath, c)
-            grailsFlowHandlerMapping.registerFlowMappingPattern(controllerPath + "/", c)
-        }
         for (flow in flows) {
             String flowName = flow.key.substring(0, flow.key.length() - FLOW_SUFFIX.length());
             def flowId = ("${c.logicalPropertyName}/" + flowName).toString()
@@ -206,12 +206,7 @@ class WebFlowPluginSupport {
             builder.applicationContext = appCtx
             def assembler = new FlowAssembler(builder, builder.getFlowBuilderContext())
             appCtx.flowRegistry.registerFlowDefinition new DefaultFlowHolder(assembler)
-            String controllerPath = "/" + urlConverter.toUrlElement(c.name) + "/";
-            String tmpUri = controllerPath + urlConverter.toUrlElement(flowName);
-            String tmpUri2 = tmpUri + "/" + "**";
-            String viewPath = "/" + GrailsNameUtils.getPropertyNameRepresentation(c.name) + "/" + flowName;
-            grailsFlowHandlerMapping.registerFlowMappingPattern(tmpUri, c)
-            grailsFlowHandlerMapping.registerFlowMappingPattern(tmpUri2, c)
+            grailsFlowHandlerMapping.registerFlow(c, flowName)
         }
     }
 
