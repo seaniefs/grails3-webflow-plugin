@@ -77,11 +77,19 @@ sourceSets {
         main {
             groovy {
                 exclude '**/UrlMappings.groovy'
-                exclude 'views/**'
             }
         }
     }
 }
+
+compileWebappGroovyPages {
+  enabled = false
+}
+
+compileGroovyPages {
+  enabled = false
+}
+
 
 task wrapper(type: Wrapper) {
     gradleVersion = gradleWrapperVersion
