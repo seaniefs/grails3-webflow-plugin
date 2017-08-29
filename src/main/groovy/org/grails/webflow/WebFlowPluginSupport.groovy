@@ -78,11 +78,11 @@ class WebFlowPluginSupport {
         }
         //conversationService(WebflowDefaultConversionService)
         sep(SpelExpressionParser)
-        expressionParser(WebFlowSpringELExpressionParser, sep, conversionServiceRef)
+        webFlowExpressionParser(WebFlowSpringELExpressionParser, sep, conversionServiceRef)
 
         flowBuilderServices(FlowBuilderServices) {
             conversionService = conversionServiceRef
-            expressionParser =  expressionParser
+            expressionParser =  webFlowExpressionParser
             viewFactoryCreator = viewFactoryCreator
         }
 
