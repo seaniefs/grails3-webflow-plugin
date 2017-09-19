@@ -129,7 +129,12 @@ class FlowBuilder extends AbstractFlowBuilder implements GroovyObject, Applicati
             flowDefiningMode = false
             initialised = true
             Flow flow = super.getFlow()
-            flow.attributes.put("persistenceContext", "true")
+            if(!(flow.attributes.get("transactional") in ["false", false])) {
+                flow.attributes.put("persistenceContext", "true")
+            }
+            if(flow.attributes.get("openSessionInView") in ["true", true]) {
+                flow.attributes.put("openSessionInView", "true")
+            }
             return flow
         }
 
@@ -144,7 +149,15 @@ class FlowBuilder extends AbstractFlowBuilder implements GroovyObject, Applicati
                 }
                 else if ("input" == name) {
                     flow.inputMapper = new InputMapper(args[0])
-                } else if ("globalTransitions" == name) {
+                }
+                else if("flowAttributes" == name) {
+                    Closure c = args[0]
+                    Map attributes = c?.call()
+                    attributes?.each {k, v ->
+                        flow.attributes.put("" + k,v)
+                    }
+                }
+                else if ("globalTransitions" == name) {
                     GlobalTransitionCapturer transitionCapturer = new GlobalTransitionCapturer(this, applicationContext)
                     Closure c = args[0]
                     c.delegate = transitionCapturer

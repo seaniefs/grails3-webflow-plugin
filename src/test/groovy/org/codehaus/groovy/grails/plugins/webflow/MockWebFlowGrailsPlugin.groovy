@@ -16,7 +16,8 @@ package org.codehaus.groovy.grails.plugins.webflow
 
 import grails.util.GrailsUtil
 
-import org.grails.webflow.WebFlowPluginSupport
+
+import webflow.WebflowGrailsPlugin
 
 /**
  * A Grails plug-in that sets up Spring webflow integration.
@@ -31,22 +32,24 @@ class MockWebFlowGrailsPlugin {
     def observe = ['controllers']
     def loadAfter = ['hibernate']
 
+    def plugin = new WebflowGrailsPlugin()
+
     /**
      * The doWithSpring method of this plug-in registers two beans. The 'flowRegistry" bean which is responsible for storing
      * flows and the 'flowExecutor' bean which is the core of Spring WebFlow and deals with the execution of flows
      */
-    def doWithSpring = WebFlowPluginSupport.doWithSpring
+    def doWithSpring = plugin.doWithSpring()
 
     /**
      * Spring WebFlow has its own Map API for some reason so we can add implementations so that they behave like Groovy maps
      * Also we add shortcuts such as flow, conversation and flash for accessing the scopes as the "Scope" suffix seems redundant
      */
-    def doWithDynamicMethods = WebFlowPluginSupport.doWithDynamicMethods
+    def doWithDynamicMethods = {plugin.doWithDynamicMethods()}
 
     /**
      * Since this plug-in observes the controllers plugin it will receive onChange events when controllers change.
      * This onChange handler will then go through all the flows of the controller, assemble them and re-register
      * with the flow definition registry
      */
-    def onChange = WebFlowPluginSupport.onChange
+    def onChange = {plugin.onChange(it)}
 }
