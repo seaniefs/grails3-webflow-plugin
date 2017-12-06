@@ -57,7 +57,7 @@ dependencies {
     testRuntime "net.sourceforge.htmlunit:htmlunit:2.18"
     
     compile 'org.grails:grails-web-databinding-spring:2.5.4'
-    compile('org.springframework.webflow:spring-webflow:2.4.3.RELEASE') {
+    compile('org.springframework.webflow:spring-webflow:2.4.6.RELEASE') {
         exclude module: "spring-beans"
         exclude module: "spring-expression"
         exclude module: "spring-context"
