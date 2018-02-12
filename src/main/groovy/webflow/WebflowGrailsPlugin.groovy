@@ -17,6 +17,7 @@ import org.springframework.beans.factory.FactoryBean
 import org.springframework.binding.convert.service.DefaultConversionService
 import org.springframework.context.ApplicationContext
 import org.springframework.expression.spel.standard.SpelExpressionParser
+import org.springframework.webflow.conversation.ConversationManager
 import org.springframework.webflow.conversation.impl.SessionBindingConversationManager
 import org.springframework.webflow.core.collection.LocalAttributeMap
 import org.springframework.webflow.core.collection.MutableAttributeMap
@@ -29,6 +30,9 @@ import org.springframework.webflow.engine.builder.FlowAssembler
 import org.springframework.webflow.engine.builder.support.FlowBuilderServices
 import org.springframework.webflow.engine.impl.FlowExecutionImplFactory
 import org.springframework.webflow.execution.FlowExecutionFactory
+import org.springframework.webflow.execution.FlowExecutionKey
+import org.springframework.webflow.execution.repository.BadlyFormattedFlowExecutionKeyException
+import org.springframework.webflow.execution.repository.FlowExecutionRepositoryException
 import org.springframework.webflow.execution.repository.impl.DefaultFlowExecutionRepository
 import org.springframework.webflow.execution.repository.snapshot.FlowExecutionSnapshotFactory
 import org.springframework.webflow.execution.repository.snapshot.SerializedFlowExecutionSnapshotFactory
@@ -166,7 +170,7 @@ Brief summary/description of the plugin.
                 flowDefinitionLocator = ref("flowRegistry")
                 otherAttrs = snapshotFactoryClazzAttrs
             }
-            flowExecutionRepository(DefaultFlowExecutionRepository, conversationManager, flowExecutionSnapshotFactory) {
+            flowExecutionRepository(CustomFlowExecutionRepository, conversationManager, flowExecutionSnapshotFactory) {
                 maxSnapshots = maxSnapshotsValue
             }
             flowExecutor(GrailsFlowExecutorImpl, flowRegistry, flowExecutionFactory, flowExecutionRepository)
@@ -372,5 +376,28 @@ class FlowExecutionSnapshotFactoryFactory implements FactoryBean {
     @Override
     Class<?> getObjectType() {
         return instanceClazz
+    }
+}
+
+class CustomFlowExecutionRepository extends DefaultFlowExecutionRepository {
+    CustomFlowExecutionRepository(ConversationManager conversationManager, FlowExecutionSnapshotFactory snapshotFactory) {
+        super(conversationManager, snapshotFactory)
+    }
+
+    @Override
+    FlowExecutionKey parseFlowExecutionKey(String encodedKey) throws FlowExecutionRepositoryException {
+        try {
+            return super.parseFlowExecutionKey(encodedKey)
+        }
+        catch(BadlyFormattedFlowExecutionKeyException eEKE) {
+            if(eEKE?.getCause() instanceof NumberFormatException) {
+                // Ok, throw away the NumberFormatException, otherwise it's difficult for Grails
+                // to select the correct Exception handler...
+                throw new BadlyFormattedFlowExecutionKeyException(eEKE.getFormat(), eEKE.getInvalidKey());
+            }
+            else {
+                throw eEKE
+            }
+        }
     }
 }
