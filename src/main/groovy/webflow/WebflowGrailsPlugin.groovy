@@ -46,10 +46,10 @@ import java.lang.reflect.Modifier
 class WebflowGrailsPlugin extends Plugin {
 
     def name = "webflow"
-    def version = "2.2.0-SNAPSHOT"
+    def version = "3.2.0-SNAPSHOT"
 
     // the version or versions of Grails the plugin is designed for
-    def grailsVersion = "3.1.4 > *"
+    def grailsVersion = "3.2.0 > *"
     // resources that are excluded from plugin packaging
     def pluginExcludes = [
         "grails-app/views/**"
