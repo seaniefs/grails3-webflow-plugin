@@ -1,266 +1,228 @@
 package grails.test.mixin
 
 import grails.persistence.Entity
-import grails.test.mixin.domain.DomainClassUnitTestMixin
 import grails.test.mixin.webflow.WebFlowUnitTestMixin
-import org.junit.Test
+import grails.testing.gorm.DataTest
 
-@TestMixin([WebFlowUnitTestMixin, DomainClassUnitTestMixin])
-class WebFlowUnitTestMixinTests {
+class WebFlowUnitTestMixinTests extends WebFlowUnitTestMixin<MealController> implements DataTest {
 
-    @Test
-    void testEatBreakfast_EggsFailValidation() {
+    void setup() {
+        mockWebFlowController(MealController)
         mockDomain(Meal)
-        mockController(MealController)
-
-        def meal = new Meal()
-        meal.eggs = true
-        conversation.meal = meal
-
-        breakfastFlow.eatBreakfast.action()
-
-        assert 'unableToEatBreakfast' == obtainTestState().stateTransition
-        assert !conversation.meal.hotSauce
-        assert conversation.meal.hasErrors()
     }
 
-    // TODO: Revisit - :P
-    WebFlowUnitTestMixin.TestState obtainTestState() {
-        runtime.getValue("webFlowTestState")
+    void shouldEatBreakfastEggsFailValidation() {
+        given: "We setup"
+            def meal = new Meal()
+            meal.eggs = true
+            conversation.meal = meal
+        when: "We perform the action"
+            breakfastFlow.eatBreakfast.action()
+        then: "We expect the following"
+            'unableToEatBreakfast' == getTestState().stateTransition
+            !conversation.meal.hotSauce
+            conversation.meal.hasErrors()
     }
 
-    @Test
-    void testFlowExecution() {
-        mockController(MealController)
-
-        breakfastFlow.init.action()
-
-        assert conversation.meal != null
+    void shouldTestFlowExecution() {
+        when: "We execute the breakfast flow"
+            breakfastFlow.init.action()
+        then: "A meal should be present"
+            conversation.meal != null
     }
 
-    @Test
-    void testExecuteTransitionAction() {
-        mockDomain(Meal)
-        mockController(MealController)
-        def meal = new Meal()
-        conversation.meal = meal
+    void shouldTestExecuteTransitionAction() {
+        given: "We have a meal and we are feeling sick"
+            def meal = new Meal()
+            conversation.meal = meal
 
-        params.reason = "Feeling Sick"
-
-        def event = breakfastFlow.chooseMainDish.on.nothing.action()
-
-        assert event == 'success'
-        assert 'end' == obtainTestState().stateTransition
-        assert params.reason == conversation.meal.skipReason
-        assert conversation.meal.id
+            params.reason = "Feeling Sick"
+        when: "We trigger the action"
+            def event = breakfastFlow.chooseMainDish.on.nothing.action()
+        then: "All OK - exit the flow"
+            event == 'success'
+            'end' == getTestState().stateTransition
+            params.reason == conversation.meal.skipReason
+            conversation.meal.id
     }
 
-    @Test
-    void testChooseMainDish_TransitionNothingAction_BadReason() {
-        mockDomain(Meal)
-        mockController(MealController)
-        def meal = new Meal()
-        conversation.meal = meal
+    void shouldTestChooseMainDishTransitionNothingActionBadReason() {
+        given: "We have a meal and we are feeling sick"
+            def meal = new Meal()
+            conversation.meal = meal
 
-        params.reason = ""
-
-        def event = breakfastFlow.chooseMainDish.on.nothing.action()
-
-        assert 'error' == event
-        assert 'chooseMainDish' == obtainTestState().stateTransition
-        assert !conversation.meal.skipReason
-        assert !conversation.meal.id
+            params.reason = ""
+        when: "We trigger the action"
+            def event = breakfastFlow.chooseMainDish.on.nothing.action()
+        then: "An error occurs"
+            'error' == event
+            'chooseMainDish' == getTestState().stateTransition
+            !conversation.meal.skipReason
+            !conversation.meal.id
     }
 
-    @Test
-    void testSubflowArgs() {
-        mockDomain(Meal)
-        mockController(MealController)
-
-        def subflow = breakfastFlow.prepareBacon.subflow
-
-        assert 'prepareBacon' == breakfastFlow.prepareBacon.subflowArgs.action
-        assert 'meal' == breakfastFlow.prepareBacon.subflowArgs.controller
-        assert breakfastFlow.prepareBacon.subflowArgs.input.meal
+    void shouldTestSubflowArgs() {
+        when: "We have a subflow"
+            def subflow = breakfastFlow.prepareBacon.subflow
+        then: "Args are passed as expected"
+            'prepareBacon' == breakfastFlow.prepareBacon.subflowArgs.action
+            'meal' == breakfastFlow.prepareBacon.subflowArgs.controller
+            breakfastFlow.prepareBacon.subflowArgs.input.meal
     }
 
-    @Test
-    void testFlowOutput() {
-        mockDomain(Meal)
-        mockController(MealController)
-        flow.baconFlow = 'bacon'
+    void shouldTestFlowOutput() {
+        when: "We trigger an output"
+            flow.baconFlow = 'bacon'
 
-        prepareBaconFlow.end.output()
-
-        assert 'bacon' == currentEvent.attributes.baconConst
-        assert 'bacon' == currentEvent.attributes.baconValue
-        assert 'bacon' == currentEvent.attributes.baconFlow
+            prepareBaconFlow.end.output()
+        then: "The output is as expected"
+            'bacon' == currentEvent.attributes.baconConst
+            'bacon' == currentEvent.attributes.baconValue
+            'bacon' == currentEvent.attributes.baconFlow
     }
 
-    @Test
-    void testFlowInputDefault() {
-        mockDomain(Meal)
-        mockController(MealController)
-
-        def inputParams = [
-                defaultBaconInput: 'bacon',
-                requiredWithoutValueBaconInput: 'bacon'
-        ]
-
-        prepareBaconFlow.input(inputParams)
-
-        assert 'bacon' == flow.defaultBaconInput
-        assert 'bacon' == flow.requiredWithoutValueBaconInput
-    }
-
-    @Test
-    void testFlowInputRequiredWithoutValue() {
-        mockDomain(Meal)
-        mockController(MealController)
-
-        def inputParams = [
-                defaultBaconInput: 'bacon'
-        ]
-
-        shouldFail MissingPropertyException, {
+    void shouldTestFlowInputDefault() {
+        given: "We have some inputs"
+            def inputParams = [
+                    defaultBaconInput: 'bacon',
+                    requiredWithoutValueBaconInput: 'bacon'
+            ]
+        when: "We trigger the flow with those"
             prepareBaconFlow.input(inputParams)
-        }
-
-        inputParams = [
-                defaultBaconInput: 'bacon',
-                requiredWithoutValueBaconInput: 'bacon'
-        ]
-
-        prepareBaconFlow.input(inputParams)
-
-        assert 'bacon' == flow.requiredWithoutValueBaconInput
+        then: "They are as expected"
+            assert 'bacon' == flow.defaultBaconInput
+            assert 'bacon' == flow.requiredWithoutValueBaconInput
     }
 
-    @Test
-    void testFlowInputRequiredWithValue() {
-        mockDomain(Meal)
-        mockController(MealController)
-
-        def inputParams = [
-                requiredWithoutValueBaconInput: 'bacon'
-        ]
-
-        prepareBaconFlow.input(inputParams)
-
-        assert 'baconValue' == flow.requiredWithValueBaconInput
-
-        inputParams = [
-                requiredWithoutValueBaconInput: 'bacon',
-                requiredWithValueBaconInput: 'bacon'
-        ]
-
-        prepareBaconFlow.input(inputParams)
-
-        assert 'bacon' == flow.requiredWithValueBaconInput
+    void shouldTestFlowInputRequiredWithoutValue() {
+        given: "We have some inputs but missing a required value"
+            def inputParams = [
+                    defaultBaconInput: 'bacon'
+            ]
+        when: "We attempt to start"
+            prepareBaconFlow.input(inputParams)
+        then: "Starting should fail"
+            thrown MissingPropertyException
+        when: "We have some inputs with a required value and we trigger again"
+            inputParams = [
+                    defaultBaconInput: 'bacon',
+                    requiredWithoutValueBaconInput: 'bacon'
+            ]
+            prepareBaconFlow.input(inputParams)
+        then: "All is well"
+            'bacon' == flow.requiredWithoutValueBaconInput
     }
 
-    @Test
-    void testFlowInputNotRequiredWithValue() {
-        mockDomain(Meal)
-        mockController(MealController)
-
-        def inputParams = [
-                requiredWithoutValueBaconInput: 'bacon'
-        ]
-
-        prepareBaconFlow.input(inputParams)
-
-        assert 'baconValue' == flow.notRequiredWithValueBaconInput
-
-        inputParams = [
-                requiredWithoutValueBaconInput: 'bacon',
-                notRequiredWithValueBaconInput: 'bacon'
-        ]
-
-        prepareBaconFlow.input(inputParams)
-
-        assert 'bacon' == flow.notRequiredWithValueBaconInput
+    void shouldTestFlowInputRequiredWithValue() {
+        given: "We have some input params"
+            def inputParams = [
+                    requiredWithoutValueBaconInput: 'bacon'
+            ]
+        when: "We trigger the flow"
+            prepareBaconFlow.input(inputParams)
+        then: "The required input should be defaulted"
+            'baconValue' == flow.requiredWithValueBaconInput
+        when: "We have some input params and trigger the flow"
+            inputParams = [
+                    requiredWithoutValueBaconInput: 'bacon',
+                    requiredWithValueBaconInput: 'bacon'
+            ]
+            prepareBaconFlow.input(inputParams)
+        then: "The required input is taken from the input provided"
+            'bacon' == flow.requiredWithValueBaconInput
     }
 
-    @Test
-    void testFlowInputClosure() {
-        mockDomain(Meal)
-        mockController(MealController)
+    void shouldTestFlowInputNotRequiredWithValue() {
+        given: "We have input params"
+            def inputParams = [
+                    requiredWithoutValueBaconInput: 'bacon'
+            ]
+        when: "We trigger the flow"
+            prepareBaconFlow.input(inputParams)
+        then: "The input has the correct value"
+            'baconValue' == flow.notRequiredWithValueBaconInput
+        when: "We override the value"
+            inputParams = [
+                    requiredWithoutValueBaconInput: 'bacon',
+                    notRequiredWithValueBaconInput: 'bacon'
+            ]
 
-        flow.closureBaconInputValue = 'bacon'
-
-        def inputParams = [
-                requiredWithoutValueBaconInput: 'bacon',
-        ]
-
-        prepareBaconFlow.input(inputParams)
-
-        assert 'bacon' == flow.closureBaconInput
+            prepareBaconFlow.input(inputParams)
+        then: "It takes the override"
+            'bacon' == flow.notRequiredWithValueBaconInput
     }
 
-    @Test
-    void testFlowInputClosureValue() {
-        mockDomain(Meal)
-        mockController(MealController)
+    void shouldTestFlowInputClosure() {
+        given: "We have flow vars setup"
+            flow.closureBaconInputValue = 'bacon'
 
-        flow.closureWithValueBaconInputValue = 'bacon'
-
-        def inputParams = [
-                requiredWithoutValueBaconInput: 'bacon'
-        ]
-
-        prepareBaconFlow.input(inputParams)
-
-        assert 'bacon' == flow.closureWithValueBaconInput
+            def inputParams = [
+                    requiredWithoutValueBaconInput: 'bacon',
+            ]
+        when: "We run the flow"
+            prepareBaconFlow.input(inputParams)
+        then: "The value is as expected"
+            'bacon' == flow.closureBaconInput
     }
 
-    @Test
-    void testFlowInputValue() {
-        mockDomain(Meal)
-        mockController(MealController)
+    void shouldTestFlowInputClosureValue() {
+        given: "We have flow vars setup"
+            flow.closureWithValueBaconInputValue = 'bacon'
 
-        def inputParams = [
-                requiredWithoutValueBaconInput: 'bacon'
-        ]
+            def inputParams = [
+                    requiredWithoutValueBaconInput: 'bacon'
+            ]
+        when: "We run the flow"
+            prepareBaconFlow.input(inputParams)
+        then: "The value is as expected"
+            'bacon' == flow.closureWithValueBaconInput
+    }
 
-        prepareBaconFlow.input(inputParams)
+    void shouldTestFlowInputValue() {
+        given: "We have an input setup"
+            def inputParams = [
+                    requiredWithoutValueBaconInput: 'bacon'
+            ]
 
-        assert 'baconValue' == flow.defaultValueBaconInput
+        when: "We run the flow"
+            prepareBaconFlow.input(inputParams)
 
-        inputParams = [
-                requiredWithoutValueBaconInput: 'bacon',
-                defaultValueBaconInput: 'bacon'
-        ]
+        then: "The value is as expected"
+            'baconValue' == flow.defaultValueBaconInput
+        when: "We run with different values"
+            inputParams = [
+                    requiredWithoutValueBaconInput: 'bacon',
+                    defaultValueBaconInput: 'bacon'
+            ]
 
-        prepareBaconFlow.input(inputParams)
-
-        assert 'bacon' == flow.defaultValueBaconInput
+            prepareBaconFlow.input(inputParams)
+        then: "The input is as expected"
+            'bacon' == flow.defaultValueBaconInput
 
     }
 
-    @Test
-    void testGeneralTransitionStructure() {
-        mockController(MealController)
+    void shouldTestGeneralTransitionStructure() {
+        expect: "All these transitions should yield the expected results"
+            'chooseMainDish' == breakfastFlow.init.on.success.to
+            'prepareEggs' == breakfastFlow.chooseMainDish.on.eggs.to
+            'prepareToast' == breakfastFlow.chooseMainDish.on.toast.to
+            'end' == breakfastFlow.chooseMainDish.on.nothing.to
 
-        assert 'chooseMainDish' == breakfastFlow.init.on.success.to
-        assert 'prepareEggs' == breakfastFlow.chooseMainDish.on.eggs.to
-        assert 'prepareToast' == breakfastFlow.chooseMainDish.on.toast.to
-        assert 'end' == breakfastFlow.chooseMainDish.on.nothing.to
+            'eatBreakfast' == breakfastFlow.prepareEggs.on.success.to
+            'chooseMainDish' == breakfastFlow.prepareEggs.on.errors.to
 
-        assert 'eatBreakfast' == breakfastFlow.prepareEggs.on.success.to
-        assert 'chooseMainDish' == breakfastFlow.prepareEggs.on.errors.to
+            'eatBreakfast' == breakfastFlow.prepareToast.on.success.to
+            'chooseMainDish' == breakfastFlow.prepareToast.on.errors.to
 
-        assert 'eatBreakfast' == breakfastFlow.prepareToast.on.success.to
-        assert 'chooseMainDish' == breakfastFlow.prepareToast.on.errors.to
+            'beHappy' == breakfastFlow.eatBreakfast.on.success.to
+            'chooseMainDish' == breakfastFlow.eatBreakfast.on.unableToEatBreakfast.to
 
-        assert 'beHappy' == breakfastFlow.eatBreakfast.on.success.to
-        assert 'chooseMainDish' == breakfastFlow.eatBreakfast.on.unableToEatBreakfast.to
+            'end' == breakfastFlow.beHappy.on.done.to
+            'chooseMainDish' == breakfastFlow.beHappy.on.eatMore.to
 
-        assert 'end' == breakfastFlow.beHappy.on.done.to
-        assert 'chooseMainDish' == breakfastFlow.beHappy.on.eatMore.to
-
-        assert !breakfastFlow.end.on
+            !breakfastFlow.end.on
     }
+
 }
 
 @Entity

@@ -10,7 +10,6 @@ import org.hibernate.Interceptor
 import org.hibernate.LobHelper
 import org.hibernate.LockMode
 import org.hibernate.LockOptions
-import org.hibernate.MultiIdentifierLoadAccess
 import org.hibernate.NaturalIdLoadAccess
 import org.hibernate.Query
 import org.hibernate.ReplicationMode
@@ -46,7 +45,6 @@ import org.hibernate.persister.entity.EntityPersister
 import org.hibernate.procedure.ProcedureCall
 import org.hibernate.resource.transaction.TransactionCoordinator
 import org.hibernate.stat.SessionStatistics
-import org.hibernate.type.descriptor.WrapperOptions
 
 import java.sql.Connection
 
@@ -656,16 +654,6 @@ class SessionTransientWrapper implements Session, SessionImplementor {
     }
 
     @Override
-    public <T> MultiIdentifierLoadAccess<T> byMultipleIds(Class<T> entityClass) {
-        return session.byMultipleIds( entityClass );
-    }
-
-    @Override
-    public MultiIdentifierLoadAccess byMultipleIds(String entityName) {
-        return session.byMultipleIds( entityName );
-    }
-
-    @Override
     public <T> IdentifierLoadAccess<T> byId(Class<T> entityClass) {
         return session.byId( entityClass );
     }
@@ -768,11 +756,6 @@ class SessionTransientWrapper implements Session, SessionImplementor {
     @Override
     public void addEventListeners(SessionEventListener... listeners) {
         session.addEventListeners( listeners );
-    }
-
-    @Override
-    public WrapperOptions getWrapperOptions() {
-        return sessionImplementor.getWrapperOptions();
     }
 
 }

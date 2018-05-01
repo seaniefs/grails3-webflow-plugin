@@ -14,32 +14,16 @@
  */
 package org.grails.webflow.engine.builder
 
-import grails.core.GrailsDomainClassProperty
 import grails.util.GrailsNameUtils
-import grails.util.Holders
-import grails.validation.ConstraintsEvaluator
+import grails.validation.Validateable
 import grails.web.databinding.DataBindingUtils
-import org.codehaus.groovy.grails.web.binding.UriEditor
-
-import org.grails.core.support.GrailsDomainConfigurationUtil
-import org.grails.validation.DefaultConstraintEvaluator
-import org.grails.web.beans.PropertyEditorRegistryUtils
-import org.grails.web.servlet.mvc.GrailsWebRequest
+import org.grails.datastore.gorm.validation.constraints.eval.DefaultConstraintEvaluator
 import org.grails.web.servlet.DefaultGrailsApplicationAttributes
-import grails.web.databinding.GrailsWebDataBinder
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import org.springframework.beans.PropertyEditorRegistry
 import org.springframework.beans.factory.config.AutowireCapableBeanFactory
-import org.springframework.beans.propertyeditors.CurrencyEditor
-import org.springframework.beans.propertyeditors.LocaleEditor
-import org.springframework.beans.propertyeditors.TimeZoneEditor
 import org.springframework.validation.Errors
-import org.springframework.validation.Validator
 import org.springframework.web.context.request.RequestContextHolder as RCH
-import org.springframework.web.multipart.support.ByteArrayMultipartFileEditor
-import org.springframework.web.multipart.support.StringMultipartFileEditor
-import org.springframework.web.servlet.support.RequestContextUtils
 import org.springframework.webflow.action.AbstractAction
 import org.springframework.webflow.core.collection.LocalAttributeMap
 import org.springframework.webflow.execution.Event
@@ -71,28 +55,34 @@ class ClosureInvokingAction extends AbstractAction {
         this.noOfParams = commandClasses.size()
         this.hasCommandObjects = noOfParams > 1 || (noOfParams == 1 && commandClasses[0] != Object.class && commandClasses[0] != RequestContext.class)
         if (hasCommandObjects) {
-            for (co in commandClasses) {
-                co.metaClass.getErrors = {->
-                    RCH.currentRequestAttributes().getAttribute("${co.name}_${delegate.hashCode()}_errors",0)
-                }
-                co.metaClass.setErrors = { Errors errors ->
-                    RCH.currentRequestAttributes().setAttribute("${co.name}_${delegate.hashCode()}_errors",errors,0)
-                }
-                co.metaClass.hasErrors = {-> errors?.hasErrors() ? true : false }
-                def constrainedProperties = new DefaultConstraintEvaluator().evaluate(co.newInstance(), (GrailsDomainClassProperty[])null)
-                co.metaClass.getConstraints = {-> constrainedProperties }
-                co.metaClass.validate = {->
-                    errors = new org.springframework.validation.BeanPropertyBindingResult(delegate, delegate.class.name)
-                    def localErrors = errors
-
-                    checkAppContext()
-                    if (constrainedProperties) {
-                        for (prop in constrainedProperties.values()) {
-                            prop.messageSource = applicationContext.getBean("messageSource")
-                            prop.validate(delegate, delegate.getProperty(prop.getPropertyName()), localErrors)
-                        }
+            for (Class co in commandClasses) {
+                // Only required for items which are not Validateable...
+                if(!Validateable.isAssignableFrom(co)) {
+                    co.metaClass.getErrors = {->
+                        RCH.currentRequestAttributes().getAttribute("${co.name}_${delegate.hashCode()}_errors",0)
                     }
-                    !localErrors.hasErrors()
+                    co.metaClass.setErrors = { Errors errors ->
+                        RCH.currentRequestAttributes().setAttribute("${co.name}_${delegate.hashCode()}_errors",errors,0)
+                    }
+                    co.metaClass.hasErrors = {-> errors?.hasErrors() ? true : false }
+                    def constrainedProperties = new DefaultConstraintEvaluator().evaluate(co, false, false)
+                    // Disabled in 3.3.5 - This causes problems because if something implements the Validateable trait, the
+                    // co.metaClass.validate method is overridden and the net effect of this seems to be that
+                    //co.metaClass.getConstraints = {-> constrainedProperties }
+                    co.metaClass.validate = { ->
+                        errors = new org.springframework.validation.BeanPropertyBindingResult(delegate, delegate.class.name)
+                        def localErrors = errors
+
+                        checkAppContext()
+                        if (constrainedProperties) {
+                            for (prop in constrainedProperties.values()) {
+                                // Does not exist in Grails 3.3.x
+                                //prop.messageSource = applicationContext.getBean("messageSource")
+                                prop.validate(delegate, delegate.getProperty(prop.getPropertyName()), localErrors)
+                            }
+                        }
+                        !localErrors.hasErrors()
+                    }
                 }
             }
         }

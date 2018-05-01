@@ -46,10 +46,13 @@ import java.lang.reflect.Modifier
 class WebflowGrailsPlugin extends Plugin {
 
     def name = "webflow"
-    def version = "2.2.0-SNAPSHOT"
+    def version = "3.3.0-SNAPSHOT"
+
+    // The database layer needs to be loaded before we are
+    def loadAfter = ['hibernate', 'hibernate3', 'hibernate4', 'hibernate5']
 
     // the version or versions of Grails the plugin is designed for
-    def grailsVersion = "3.1.4 > *"
+    def grailsVersion = "3.3.4 > *"
     // resources that are excluded from plugin packaging
     def pluginExcludes = [
         "grails-app/views/**"
@@ -124,8 +127,8 @@ Brief summary/description of the plugin.
 
             flowBuilderServices(FlowBuilderServices) {
                 conversionService = conversionServiceRef
-                expressionParser = webFlowExpressionParser
-                viewFactoryCreator = viewFactoryCreator
+                expressionParser = ref("webFlowExpressionParser")
+                viewFactoryCreator = ref("viewFactoryCreator")
             }
 
             flowRegistry(FlowDefinitionRegistryImpl)
@@ -134,7 +137,7 @@ Brief summary/description of the plugin.
 
             // TODO: Was springConfig.containsBean("sessionFactory") but this seems to cause issues under 3.2.x, so
             //       temporarily changed - need to check this actually works as currently untested with databases
-            boolean configureHibernateListener = true
+            boolean configureHibernateListener = manager.hasGrailsPlugin("hibernate") || manager.hasGrailsPlugin("hibernate3") || manager.hasGrailsPlugin("hibernate4") || manager.hasGrailsPlugin("hibernate5")
             if (configureHibernateListener) {
                 try {
                     webFlowHibernateConversationListener(org.grails.webflow.persistence.SessionAwareHibernateFlowExecutionListener, ref("sessionFactory"), ref("transactionManager"))
@@ -164,19 +167,22 @@ Brief summary/description of the plugin.
                 snapshotFactoryClazz = SerializedFlowExecutionSnapshotFactory
             }
             //
-            flowExecutionSnapshotFactory(FlowExecutionSnapshotFactoryFactory) {
+            flowExecutionSnapshotFactory(FlowExecutionSnapshotFactoryFactory) { bean ->
+                // Need to defer initialization - otherwise startup fails because
+                // of circular dependencies!
+                bean.lazyInit = true
                 instanceClazz = snapshotFactoryClazz
                 flowExecutionFactory = ref("flowExecutionFactory")
                 flowDefinitionLocator = ref("flowRegistry")
                 otherAttrs = snapshotFactoryClazzAttrs
             }
-            flowExecutionRepository(CustomFlowExecutionRepository, conversationManager, flowExecutionSnapshotFactory) {
+            flowExecutionRepository(CustomFlowExecutionRepository, ref("conversationManager"), ref("flowExecutionSnapshotFactory")) {
                 maxSnapshots = maxSnapshotsValue
             }
-            flowExecutor(GrailsFlowExecutorImpl, flowRegistry, flowExecutionFactory, flowExecutionRepository)
+            flowExecutor(GrailsFlowExecutorImpl, ref("flowRegistry"), ref("flowExecutionFactory"), ref("flowExecutionRepository"))
 
             mainFlowController(GrailsFlowHandlerAdapter) {
-                flowExecutor = flowExecutor
+                flowExecutor = ref("flowExecutor")
                 flowUrlHandler = { GrailsFlowUrlHandler uh -> }
             }
         }

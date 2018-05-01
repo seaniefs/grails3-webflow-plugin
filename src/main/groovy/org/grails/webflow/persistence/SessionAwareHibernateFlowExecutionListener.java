@@ -198,6 +198,7 @@ public class SessionAwareHibernateFlowExecutionListener extends HibernateFlowExe
         return flowSession != null && flowSession.getDefinition().getAttributes().contains("commitAndClearOnPause");
     }
 
+    @SuppressWarnings("deprecation")
     private void obtainCurrentSession(RequestContext context) {
         MutableAttributeMap flowScope = context.getFlowScope();
         if (flowScope.get(PERSISTENCE_CONTEXT_ATTRIBUTE) != null) {
@@ -261,6 +262,7 @@ public class SessionAwareHibernateFlowExecutionListener extends HibernateFlowExe
         session.getScope().put(PERSISTENCE_CONTEXT_ATTRIBUTE, hibernateSession);
     }
 
+    @SuppressWarnings("deprecation")
     private void bind(Session session) {
         Object sessionHolder;
         if (hibernate3Present) {
